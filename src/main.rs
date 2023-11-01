@@ -44,8 +44,8 @@ fn main() -> anyhow::Result<()> {
     let mut linker = Linker::new(&engine);
     let mut store = Store::new(&engine, State {});
 
-    linker.func_wrap("env", "_puts", |s: i32| {
-        println!("puts: {}", s);
+    linker.func_wrap("env", "_sys_puts", |s: i32| {
+        println!("puts: {}", s); // TODO print the actual string
     })?;
 
     linker.func_wrap("wasi_snapshot_preview1", "proc_exit", |r: i32| {
