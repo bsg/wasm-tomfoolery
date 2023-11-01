@@ -1,3 +1,5 @@
+// TODO print script output somehow
+
 use std::process::Command;
 
 fn main() {

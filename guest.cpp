@@ -1,22 +1,27 @@
+#include <string>
+
 extern "C" void _puts(char *);
 
-typedef struct {
+struct call_t {
     int a;
     int b;
     char *c;
-} ctx_t;
+};
 
-typedef struct {
+struct ret_t {
     int status;
     int len;
     char *body;
-} res_t;
+};
 
 extern "C" 
-res_t init(ctx_t ctx) {
-    res_t res;
+ret_t init(call_t ctx) {
+    std::string msg = "hello こんにちは";
+
+    ret_t res;
     res.status = ctx.a + ctx.b;
-    res.len = 5;
-    res.body = (char *) "hello";
+    res.len = msg.length();
+    res.body = (char *) msg.c_str();
+
     return res;
 }

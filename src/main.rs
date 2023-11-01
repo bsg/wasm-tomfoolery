@@ -4,7 +4,7 @@ use wasmtime::{Engine, Linker, Module, Store};
 
 #[repr(C)]
 #[derive(Debug)]
-struct _Res {
+struct _Ret {
     status: i32,
     len: i32,
     ptr_body: i32,
@@ -12,25 +12,25 @@ struct _Res {
 
 #[repr(C)]
 #[derive(Debug)]
-struct _Ctx {
+struct _Call {
     a: i32,
     b: i32,
     c: i32,
 }
 
-impl From<_Ctx> for &[u8] {
-    fn from(val: _Ctx) -> Self {
+impl From<_Call> for &[u8] {
+    fn from(val: _Call) -> Self {
         unsafe {
             std::slice::from_raw_parts(
-                (&val as *const _Ctx) as *const u8,
-                std::mem::size_of::<_Ctx>(),
+                (&val as *const _Call) as *const u8,
+                std::mem::size_of::<_Call>(),
             )
         }
     }
 }
 
 #[derive(Default, Debug)]
-struct Res {
+struct Ret {
     status: i32,
     body: String,
 }
@@ -48,6 +48,10 @@ fn main() -> anyhow::Result<()> {
         println!("puts: {}", s);
     })?;
 
+    linker.func_wrap("wasi_snapshot_preview1", "proc_exit", |r: i32| {
+        println!("proc_exit with {}", r);
+    })?;
+
     let instance = linker.instantiate(&mut store, &module)?;
 
     let guest_init = instance.get_typed_func::<(i32, i32), ()>(&mut store, "init")?;
@@ -57,20 +61,20 @@ fn main() -> anyhow::Result<()> {
     let memory = instance.get_memory(&mut store, "memory").unwrap();
 
     // TODO how to free the space allocated here? also maybe don't depend on emscripten conveniences?
-    let offset = guest_stackalloc.call(&mut store, mem::size_of::<_Ctx>() as i32)?;
-    let ctx = _Ctx { a: 123, b: 8, c: 0 };
+    let offset = guest_stackalloc.call(&mut store, mem::size_of::<_Ret>() as i32)?;
+    let call = _Call { a: 123, b: 8, c: 0 };
 
-    memory.write(&mut store, offset as usize, ctx.into())?;
+    memory.write(&mut store, offset as usize, call.into())?;
     guest_init.call(&mut store, (arg_in, offset))?;
 
-    let mut buf = [0u8; mem::size_of::<_Res>()];
+    let mut buf = [0u8; mem::size_of::<_Ret>()];
     memory.read(&store, arg_in as usize, &mut buf.as_mut_slice())?;
-    let r: _Res = unsafe { mem::transmute(buf) };
+    let r: _Ret = unsafe { mem::transmute(buf) };
     println!("{:?}", r);
 
-    let mut res: Res = Res::default();
-    res.status = r.status;
-    let mut buf = [0u8; 255];
+    let mut ret: Ret = Ret::default();
+    ret.status = r.status;
+    let mut buf: Vec<u8> = vec![0u8; r.len as usize];
     memory.read(&store, r.ptr_body as usize, buf.as_mut_slice())?;
     unsafe {
         memory
@@ -78,11 +82,11 @@ fn main() -> anyhow::Result<()> {
             .add(r.ptr_body as usize)
             .copy_to_nonoverlapping(buf.as_mut_ptr(), r.len as usize)
     }
-    res.body = std::str::from_utf8(&buf[0usize..(r.len as usize)])
+    ret.body = std::str::from_utf8(buf.as_slice())
         .unwrap()
         .to_string();
 
-    println!("{:?}", res);
+    println!("{:?}", ret);
 
     Ok(())
 }
